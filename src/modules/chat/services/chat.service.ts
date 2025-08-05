@@ -48,7 +48,7 @@ export class ChatService {
 
     const runWorkflow = async () => {
       try {
-        const chatHistory = await this.getChatHistory(sessionId);
+        const chatHistory = await this.getChatHistory(sessionId, -3);
 
         const workflowState: WorkflowState = {
           textInput: request.message,
@@ -86,7 +86,8 @@ export class ChatService {
 
         const finalResponse = result.finalResponse ?? 'No response generated';
         const userMessage = request.message ?? 'No message provided';
-        await this.saveChatHistory(sessionId, userMessage, finalResponse);
+        const chatTitle = result.title
+        await this.saveChatHistory(sessionId, userMessage, finalResponse, chatTitle as string);
 
       } catch (error) {
         await this.langSmith.traceRun('chat_service_error', { sessionId }, {}, error as Error);
@@ -115,7 +116,7 @@ export class ChatService {
     );
   }
 
-  async getChatHistory(sessionId: string): Promise<ChatHistoryEntry[]> {
+  async getChatHistory(sessionId: string, limit?: number): Promise<ChatHistoryEntry[]> {
     try {
       const fileUrl = await this.supabaseService.getHistoryUrl(sessionId);
       if (!fileUrl) {
@@ -123,7 +124,7 @@ export class ChatService {
       }
       
       const chatHistory =  await this.cloudinaryService.downloadChatHistory(fileUrl);
-      return chatHistory.slice(-3)
+      return limit? chatHistory.slice(limit): chatHistory
     } catch (error) {
       console.error('Error retrieving chat history:', error);
       return [];
@@ -167,6 +168,7 @@ export class ChatService {
     sessionId: string,
     userMessage: string,
     llmResponse: string,
+    chatTitle: string
   ): Promise<void> {
     try {
       const existingFileUrl = await this.supabaseService.getHistoryUrl(sessionId);
@@ -192,6 +194,9 @@ export class ChatService {
         chatHistory,
       );
       await this.supabaseService.upsertHistoryUrl(sessionId, newFileUrl);
+      if (chatTitle !== ""){
+        await this.supabaseService.insertHistoryTitle(sessionId, chatTitle)
+      }
       console.log(`Chat history file updated in Cloudinary for session ${sessionId}`);
     } catch (error) {
       console.error('Error saving chat history:', error);

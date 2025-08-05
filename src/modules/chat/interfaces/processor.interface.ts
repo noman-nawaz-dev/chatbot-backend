@@ -18,4 +18,5 @@ export interface WorkflowState {
   chatHistory?: ChatHistoryEntry[];
   finalResponse?: string;
   sessionId: string;
+  title?: string
 }

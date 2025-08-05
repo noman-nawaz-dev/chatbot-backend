@@ -58,8 +58,12 @@ export class WorkflowService {
         }
       }
 
-      const finalState: WorkflowState = { ...initialState, retrievedContext, finalResponse };
-
+      let title = ""
+      if(initialState.chatHistory?.length === 0) {
+        title = (await this.llm.invoke(`As an AI Assistant, give me the title of the following chat response in 3 to 7 words:\nUser Message: ${initialState.textInput}\n AI response: ${finalResponse}`)).content as string
+        title = title.replace(/^"|"$/g, '');
+      }
+      const finalState: WorkflowState = { ...initialState, retrievedContext, finalResponse, title };
       await this.langSmith.traceRun('workflow_execution', {
         sessionId: initialState.sessionId,
       }, {

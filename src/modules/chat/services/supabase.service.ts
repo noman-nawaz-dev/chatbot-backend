@@ -53,4 +53,16 @@ export class SupabaseService {
       throw error;
     }
   }
+
+  async insertHistoryTitle(sessionId: string, title: string): Promise<void> {
+    const { error } = await this.supabase
+      .from('chat_history')
+      .update({ title })
+      .eq('sessionId', sessionId)
+
+    if (error) {
+      console.error('Error upserting history URL to Supabase:', error);
+      throw error;
+    }
+  }
 }

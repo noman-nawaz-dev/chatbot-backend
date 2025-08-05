@@ -9,6 +9,8 @@ import {
   Sse,
   Param,
   MessageEvent,
+  Get,
+  NotFoundException
 } from '@nestjs/common';
 import { ChatService } from './services/chat.service';
 import { ChatRequestDto } from './dto/chat.dto';
@@ -68,5 +70,37 @@ export class ChatController {
   @Sse('stream/:streamId')
   stream(@Param('streamId') streamId: string): Observable<MessageEvent> {
     return this.chatService.getChatStream(streamId);
+  }
+
+  /**
+   * Retrieves the chat history for a specific session,
+   * @param sessionId The ID of the chat session.
+   * @returns The chat history entries.
+   */
+  @Get(':sessionId')
+  async getChatHistory(
+    @Param('sessionId') sessionId: string,
+  ) {
+    try {
+      const history = await this.chatService.getChatHistory(
+        sessionId,
+      );
+      return {
+        sessionId,
+        history,
+        count: history.length,
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw new HttpException(
+          `No chat history found for session ID: ${sessionId} for the specified user.`,
+          HttpStatus.NOT_FOUND,
+        );
+      }
+      throw new HttpException(
+        `Failed to retrieve chat history: ${error.message}`,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 }
