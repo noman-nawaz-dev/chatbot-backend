@@ -87,7 +87,6 @@ export class SupabaseService {
       .select('sessionId, title, created_at')
       .eq('userId', userId)
       .order('updated_at', {ascending: false})
-    console.log(data, userId)
     if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
       console.error('Error fetching history URL from Supabase:', error);
       throw error;
