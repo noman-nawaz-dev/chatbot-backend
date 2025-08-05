@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { ChatHistoryTitle } from '../interfaces/processor.interface';
 
 @Injectable()
 export class SupabaseService {
@@ -65,4 +66,34 @@ export class SupabaseService {
       throw error;
     }
   }
+
+  async getHistoryTitle(sessionId: string): Promise<string | null> {
+    const { data, error } = await this.supabase
+      .from('chat_history')
+      .select('title')
+      .eq('sessionId', sessionId)
+      .single();
+
+    if (error && error.code !== 'PGRST116') {
+      console.error('Error fetching history URL from Supabase:', error);
+      throw error;
+    }
+    return data ? data.title : null;
+  }
+
+  async getAllHistoryTitle(userId: string): Promise<ChatHistoryTitle[] | null> {
+    const { data, error } = await this.supabase
+      .from('chat_history')
+      .select('sessionId, title, created_at')
+      .eq('userId', userId)
+      .order('updated_at', {ascending: false})
+    console.log(data, userId)
+    if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
+      console.error('Error fetching history URL from Supabase:', error);
+      throw error;
+    }
+
+    return data ? data : null;
+  }
+  
 }

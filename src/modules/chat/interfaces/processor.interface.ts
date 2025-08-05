@@ -10,6 +10,12 @@ export interface ChatHistoryEntry {
   llmResponse: string;
 }
 
+export interface ChatHistoryTitle {
+  sessionId: string;
+  title: string;
+  created_at: string;
+}
+
 export interface WorkflowState {
   textInput?: string;
   images: ProcessedContent[];

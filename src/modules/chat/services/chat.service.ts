@@ -13,7 +13,6 @@ import { WorkflowState } from '../interfaces/processor.interface';
 import { Observable, Subject } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { MessageEvent } from '@nestjs/common';
-import { VectorStoreService } from './vector-store.service';
 import { ChatHistoryEntry } from '../interfaces/processor.interface';
 
 @Injectable()
@@ -27,7 +26,6 @@ export class ChatService {
     private langSmith: LangSmithService,
     private cloudinaryService: CloudinaryService,
     private supabaseService: SupabaseService,
-    private vectorStore: VectorStoreService,
   ) {}
 
   /**
@@ -201,5 +199,13 @@ export class ChatService {
     } catch (error) {
       console.error('Error saving chat history:', error);
     }
+  }
+
+  async getHistoryTitle(sessionId: string){
+    return await this.supabaseService.getHistoryTitle(sessionId)
+  }
+
+  async getHistoryTitleByUserId(userId: string){
+    return await this.supabaseService.getAllHistoryTitle(userId)
   }
 }

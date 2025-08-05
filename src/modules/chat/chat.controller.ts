@@ -10,7 +10,8 @@ import {
   Param,
   MessageEvent,
   Get,
-  NotFoundException
+  NotFoundException,
+  Query
 } from '@nestjs/common';
 import { ChatService } from './services/chat.service';
 import { ChatRequestDto } from './dto/chat.dto';
@@ -87,6 +88,7 @@ export class ChatController {
       );
       return {
         sessionId,
+        title: await this.chatService.getHistoryTitle(sessionId),
         history,
         count: history.length,
       };
@@ -99,6 +101,33 @@ export class ChatController {
       }
       throw new HttpException(
         `Failed to retrieve chat history: ${error.message}`,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  /**
+     * Retrieves the chat history for a specific session,
+     * @query userId The user of the chat session.
+     * @returns The chat history entries.
+     */
+  @Get()
+  async getHistoryTitleByUserId(
+    @Query('userId') userId: string,
+  ) {
+    try {
+      console.log(userId)
+      const chatHistoryTitle = await this.chatService.getHistoryTitleByUserId(userId)
+      return chatHistoryTitle
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw new HttpException(
+          `No chat history found for user ID: ${userId}`,
+          HttpStatus.NOT_FOUND,
+        );
+      }
+      throw new HttpException(
+        `Failed to retrieve chat history titles: ${error.message}`,
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
