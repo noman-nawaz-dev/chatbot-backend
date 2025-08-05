@@ -18,7 +18,7 @@ export class VectorStoreService implements OnModuleInit {
     private configService: ConfigService,
   ) {
     this.pinecone = new Pinecone({
-      apiKey: this.configService.get<string>('PINECONE_API_KEY')!
+      apiKey: this.configService.get<string>('PINECONE_API_KEY')!,
     });
 
     this.embeddings = new CohereEmbeddings({
@@ -73,7 +73,6 @@ export class VectorStoreService implements OnModuleInit {
           metadata: flattenedMetadata,
         });
       });
-
       await this.pineconeStore.addDocuments(documents);
 
       await this.langSmith.traceRun(
@@ -99,11 +98,15 @@ export class VectorStoreService implements OnModuleInit {
     query: string,
     sessionId: string,
     limit = 5,
+    additionalFilter?: Record<string, any>,
   ): Promise<string[]> {
     try {
-      const results = await this.pineconeStore.similaritySearch(query, limit, {
-        sessionId: sessionId,
-      });
+      const filter = {
+        sessionId,
+        ...additionalFilter,
+      };
+
+      const results = await this.pineconeStore.similaritySearch(query, limit, filter);
 
       const documents = results.map(doc => doc.pageContent);
 
@@ -112,6 +115,7 @@ export class VectorStoreService implements OnModuleInit {
         {
           query,
           sessionId,
+          filter,
           resultsCount: documents.length,
         },
         { documents },

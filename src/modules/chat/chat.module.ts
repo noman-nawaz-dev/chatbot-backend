@@ -7,6 +7,8 @@ import { ImageProcessorService } from './services/image-processor.service';
 import { DocumentProcessorService } from './services/document-processor.service';
 import { WorkflowService } from './services/workflow.service';
 import { VectorStoreService } from './services/vector-store.service';
+import { CloudinaryService } from './services/cloudinary.service';
+import { SupabaseService } from './services/supabase.service';
 
 @Module({
   controllers: [ChatController],
@@ -17,6 +19,8 @@ import { VectorStoreService } from './services/vector-store.service';
     LangSmithService,
     WorkflowService,
     VectorStoreService,
+    CloudinaryService,
+    SupabaseService
   ],
 })
 export class ChatModule {}

@@ -7,14 +7,17 @@ import { ImageProcessorService } from './image-processor.service';
 import { DocumentProcessorService } from './document-processor.service';
 import { WorkflowService } from './workflow.service';
 import { LangSmithService } from './langsmith.service';
+import { CloudinaryService } from './cloudinary.service';
+import { SupabaseService } from './supabase.service';
 import { WorkflowState } from '../interfaces/processor.interface';
 import { Observable, Subject } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { MessageEvent } from '@nestjs/common';
+import { VectorStoreService } from './vector-store.service';
+import { ChatHistoryEntry } from '../interfaces/processor.interface';
 
 @Injectable()
 export class ChatService {
-  // A map to hold active stream subjects, keyed by streamId.
   private readonly chatStreams: Map<string, Subject<string>> = new Map();
 
   constructor(
@@ -22,13 +25,16 @@ export class ChatService {
     private documentProcessor: DocumentProcessorService,
     private workflowService: WorkflowService,
     private langSmith: LangSmithService,
+    private cloudinaryService: CloudinaryService,
+    private supabaseService: SupabaseService,
+    private vectorStore: VectorStoreService,
   ) {}
 
   /**
    * Sets up a chat stream, begins processing, and returns the stream ID.
    * The actual workflow runs in the background.
    */
-  // eslint-disable-next-line @typescript-eslint/require-await
+  // eslint-disable-next-line
   async initiateChat(
     request: ChatRequestDto,
     files?: Express.Multer.File[],
@@ -40,15 +46,16 @@ export class ChatService {
 
     const startTime = Date.now();
 
-    // Run the workflow asynchronously.
     const runWorkflow = async () => {
       try {
+        const chatHistory = await this.getChatHistory(sessionId);
+
         const workflowState: WorkflowState = {
           textInput: request.message,
           images: [],
           documents: [],
           retrievedContext: [],
-          chatHistory: [],
+          chatHistory: chatHistory,
           sessionId,
           finalResponse: undefined,
         };
@@ -61,11 +68,10 @@ export class ChatService {
         const result = await this.workflowService.executeWorkflow(
           workflowState,
           (chunk: string) => {
-            chatStream.next(chunk); // Push chunks to the stream.
+            chatStream.next(chunk);
           }
         );
 
-        // After completion, log the full interaction.
         const processingTime = Date.now() - startTime;
         const response: ChatResponseDto = {
           response: result.finalResponse || 'No response generated',
@@ -78,24 +84,24 @@ export class ChatService {
         };
         await this.langSmith.logInteraction(sessionId, request, { ...response }, { processingTime });
 
+        const finalResponse = result.finalResponse ?? 'No response generated';
+        const userMessage = request.message ?? 'No message provided';
+        await this.saveChatHistory(sessionId, userMessage, finalResponse);
+
       } catch (error) {
         await this.langSmith.traceRun('chat_service_error', { sessionId }, {}, error as Error);
-        chatStream.error(error); // Propagate errors to the stream.
+        chatStream.error(error);
       } finally {
-        // Signal completion and clean up resources.
         chatStream.complete();
         this.chatStreams.delete(streamId);
       }
     };
 
-    runWorkflow(); // Start the process without awaiting it.
+    runWorkflow();
 
     return streamId;
   }
 
-  /**
-   * Returns an observable for a given stream ID.
-   */
   getChatStream(streamId: string): Observable<MessageEvent> {
     const chatStream = this.chatStreams.get(streamId);
     if (!chatStream) {
@@ -104,10 +110,24 @@ export class ChatService {
 
     return chatStream.asObservable().pipe(
       map((chunk): MessageEvent => ({
-        // Format the data for SSE. The client will receive this object.
         data: { chunk },
       })),
     );
+  }
+
+  async getChatHistory(sessionId: string): Promise<ChatHistoryEntry[]> {
+    try {
+      const fileUrl = await this.supabaseService.getHistoryUrl(sessionId);
+      if (!fileUrl) {
+        return [];
+      }
+      
+      const chatHistory =  await this.cloudinaryService.downloadChatHistory(fileUrl);
+      return chatHistory.slice(-3)
+    } catch (error) {
+      console.error('Error retrieving chat history:', error);
+      return [];
+    }
   }
 
   private async processFiles(
@@ -141,5 +161,40 @@ export class ChatService {
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     ];
     return documentMimeTypes.includes(file.mimetype);
+  }
+
+  private async saveChatHistory(
+    sessionId: string,
+    userMessage: string,
+    llmResponse: string,
+  ): Promise<void> {
+    try {
+      const existingFileUrl = await this.supabaseService.getHistoryUrl(sessionId);
+      let chatHistory: ChatHistoryEntry[] = [];
+
+      if (existingFileUrl) {
+        try {
+          chatHistory = await this.cloudinaryService.downloadChatHistory(existingFileUrl);
+        } catch (error) {
+          console.warn('Failed to download existing chat history, starting fresh:', error);
+        }
+      }
+
+      const newEntry: ChatHistoryEntry = {
+        timestamp: new Date().toISOString(),
+        userMessage,
+        llmResponse,
+      };
+      chatHistory.push(newEntry);
+
+      const newFileUrl = await this.cloudinaryService.uploadChatHistory(
+        sessionId,
+        chatHistory,
+      );
+      await this.supabaseService.upsertHistoryUrl(sessionId, newFileUrl);
+      console.log(`Chat history file updated in Cloudinary for session ${sessionId}`);
+    } catch (error) {
+      console.error('Error saving chat history:', error);
+    }
   }
 }

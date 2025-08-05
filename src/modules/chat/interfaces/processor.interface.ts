@@ -1,12 +1,13 @@
-export interface ChatTurn {
-  role: 'user' | 'assistant';
-  content: string;
-}
-
 export interface ProcessedContent {
   type: 'text' | 'image' | 'document';
   content: string;
   metadata: Record<string, any>;
+}
+
+export interface ChatHistoryEntry {
+  timestamp: string;
+  userMessage: string;
+  llmResponse: string;
 }
 
 export interface WorkflowState {
@@ -14,7 +15,7 @@ export interface WorkflowState {
   images: ProcessedContent[];
   documents: ProcessedContent[];
   retrievedContext: string[];
-  chatHistory?: ChatTurn[];
+  chatHistory?: ChatHistoryEntry[];
   finalResponse?: string;
   sessionId: string;
 }

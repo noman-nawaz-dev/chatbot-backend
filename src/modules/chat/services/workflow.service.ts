@@ -36,13 +36,17 @@ export class WorkflowService {
         await this.vectorStore.storeContent(allContent, initialState.sessionId);
       }
 
-      const query = initialState.textInput || 'relevant context based on uploaded files';
-      const retrievedContext = await this.vectorStore.searchSimilar(query, initialState.sessionId, 5);
+      const query = initialState.textInput || 'summarize the provided context';
+      
+      const retrievedContext = await this.vectorStore.searchSimilar(
+        query, 
+        initialState.sessionId, 
+        5,
+      );
 
       const stateForPrompt: WorkflowState = { ...initialState, retrievedContext };
       const prompt = this.buildContextPrompt(stateForPrompt);
-      
-      // Use the .stream() method which returns an async iterator
+      console.log(prompt)
       const stream = await this.llm.stream(prompt);
 
       let finalResponse = '';
@@ -50,7 +54,7 @@ export class WorkflowService {
         const content = chunk.content as string;
         if (content) {
           finalResponse += content;
-          onChunk(content); // Use the callback to send the chunk back
+          onChunk(content);
         }
       }
 
@@ -72,12 +76,30 @@ export class WorkflowService {
   }
 
   private buildContextPrompt(state: WorkflowState): string {
-    let prompt = 'You are a helpful AI assistant. ';
-    if (state.textInput) prompt += `User message: "${state.textInput}"\n\n`;
-    if (state.images.length > 0) prompt += `Image Analysis Results:\n${state.images.map(img => img.content).join('\n')}\n\n`;
-    if (state.documents.length > 0) prompt += `Document Content Available:\n${state.documents.length} document chunks processed\n\n`;
-    if (state.retrievedContext.length > 0) prompt += `Relevant Context:\n${state.retrievedContext.join('\n---\n')}\n\n`;
-    prompt += 'Please provide a comprehensive response based on all available information.';
+    let prompt = 'You are a helpful AI assistant.\n\n';
+
+    // Section 1: Full, linear conversation history of last 3 interactions
+    if (state.chatHistory && state.chatHistory.length > 0) {
+      prompt += 'Here is the recent conversation history:\n';
+      state.chatHistory.forEach(entry => {
+        prompt += `User: ${entry.userMessage}\nAssistant: ${entry.llmResponse}\nTimestamp: ${entry.timestamp}\n`;
+      });
+      prompt += '\n';
+    }
+
+    // Section 2: Context from external files (documents, images, etc.).
+    if (state.retrievedContext.length > 0) {
+      prompt += `Here is some potentially relevant context retrieved from uploaded files and chat history:\n---\n${state.retrievedContext.join('\n---\n')}\n---\n\n`;
+    }
+
+    // Section 3: The user's latest message.
+    if (state.textInput) {
+      prompt += `The user has just sent this message: "${state.textInput}"\n\n`;
+    } else {
+      prompt += `The user has just uploaded files. Please provide a summary or a relevant response based on the uploaded content and context.\n\n`;
+    }
+
+    prompt += 'Based on all the information provided (especially the most recent messages), generate a comprehensive and relevant response.';
     return prompt;
   }
 }
