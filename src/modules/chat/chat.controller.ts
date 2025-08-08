@@ -116,7 +116,6 @@ export class ChatController {
     @Query('userId') userId: string,
   ) {
     try {
-      console.log(userId)
       const chatHistoryTitle = await this.chatService.getHistoryTitleByUserId(userId)
       return chatHistoryTitle
     } catch (error) {

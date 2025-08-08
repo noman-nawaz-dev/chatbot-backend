@@ -16,7 +16,7 @@ export class WorkflowService {
   ) {
     this.llm = new ChatOpenAI({
       openAIApiKey: this.configService.get<string>('OPENAI_API_KEY'),
-      modelName: 'gpt-4o-mini',
+      modelName: this.configService.get<string>('OPENAI_MODEL'),
       temperature: 0.7,
       streaming: true, 
     });
