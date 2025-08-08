@@ -55,6 +55,7 @@ export class ChatService {
           retrievedContext: [],
           chatHistory: chatHistory,
           sessionId,
+          userId: request.userId,
           finalResponse: undefined,
         };
 
@@ -85,7 +86,7 @@ export class ChatService {
         const finalResponse = result.finalResponse ?? 'No response generated';
         const userMessage = request.message ?? 'No message provided';
         const chatTitle = result.title
-        await this.saveChatHistory(sessionId, userMessage, finalResponse, chatTitle as string);
+        await this.saveChatHistory(sessionId, userMessage, finalResponse, chatTitle as string, request.userId);
 
       } catch (error) {
         await this.langSmith.traceRun('chat_service_error', { sessionId }, {}, error as Error);
@@ -96,7 +97,7 @@ export class ChatService {
       }
     };
 
-    runWorkflow();
+    void runWorkflow();
 
     return streamId;
   }
@@ -166,7 +167,8 @@ export class ChatService {
     sessionId: string,
     userMessage: string,
     llmResponse: string,
-    chatTitle: string
+    chatTitle: string,
+    userId?: string,
   ): Promise<void> {
     try {
       const existingFileUrl = await this.supabaseService.getHistoryUrl(sessionId);
@@ -191,7 +193,7 @@ export class ChatService {
         sessionId,
         chatHistory,
       );
-      await this.supabaseService.upsertHistoryUrl(sessionId, newFileUrl);
+      await this.supabaseService.upsertHistoryUrl(sessionId, newFileUrl, userId);
       if (chatTitle !== ""){
         await this.supabaseService.insertHistoryTitle(sessionId, chatTitle)
       }

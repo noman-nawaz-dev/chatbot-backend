@@ -40,13 +40,17 @@ export class SupabaseService {
    * @param sessionId - The session identifier.
    * @param historyUrl - The Cloudinary URL of the chat history.
    */
-  async upsertHistoryUrl(sessionId: string, historyUrl: string): Promise<void> {
+  async upsertHistoryUrl(
+    sessionId: string,
+    historyUrl: string,
+    userId?: string,
+  ): Promise<void> {
     const { error } = await this.supabase
       .from('chat_history')
       .upsert({
         sessionId,
         history_url: historyUrl,
-        userId: 'demo', // Using 'demo' as a placeholder for now
+        userId: userId === "demo" ? null : userId,
       }, { onConflict: 'sessionId' });
 
     if (error) {

@@ -9,6 +9,9 @@ export class ChatRequestDto {
   @IsString()
   sessionId?: string;
 
+  @IsString()
+  userId?: string;
+  
   @IsOptional()
   context?: any;
 }
