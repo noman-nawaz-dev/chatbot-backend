@@ -32,20 +32,22 @@ export class WorkflowService {
   ): Promise<WorkflowState> {
     try {
       const allContent = [...initialState.images, ...initialState.documents];
+      const query = initialState.textInput || 'summarize the provided context';
+      let retrievedContext: string[] = [];
+      let newUploadsContext: string[] | undefined;
+
       if (allContent.length > 0) {
-        await this.vectorStore.storeContent(allContent, initialState.sessionId);
+        newUploadsContext = allContent.slice(0, 5).map((c) => c.content);
       }
 
-      const query = initialState.textInput || 'summarize the provided context';
-      
-      const retrievedContext = await this.vectorStore.searchSimilar(
-        query, 
-        initialState.sessionId, 
+      retrievedContext = await this.vectorStore.searchSimilar(
+        query,
+        initialState.sessionId,
         5,
       );
 
       const stateForPrompt: WorkflowState = { ...initialState, retrievedContext };
-      const prompt = this.buildContextPrompt(stateForPrompt);
+      const prompt = this.buildContextPrompt(stateForPrompt, { newUploadsContext });
       console.log(prompt)
       const stream = await this.llm.stream(prompt);
 
@@ -71,6 +73,19 @@ export class WorkflowService {
         finalResponseLength: finalState.finalResponse?.length || 0,
       });
 
+      if (allContent.length > 0) {
+        void this.vectorStore
+          .storeContent(allContent, initialState.sessionId)
+          .catch(async (err: unknown) => {
+            await this.langSmith.traceRun(
+              'vector_store_deferred_error',
+              { sessionId: initialState.sessionId },
+              {},
+              err as Error,
+            );
+          });
+      }
+
       return finalState;
 
     } catch (error) {
@@ -79,7 +94,10 @@ export class WorkflowService {
     }
   }
 
-  private buildContextPrompt(state: WorkflowState): string {
+  private buildContextPrompt(
+    state: WorkflowState,
+    options?: { newUploadsContext?: string[] },
+  ): string {
     let prompt = 'You are a helpful AI assistant.\n\n';
 
     // Section 1: Full, linear conversation history of last 3 interactions
@@ -92,15 +110,20 @@ export class WorkflowService {
     }
 
     // Section 2: Context from external files (documents, images, etc.).
+    if (options?.newUploadsContext && options.newUploadsContext.length > 0) {
+      prompt += `The user has just uploaded new files in this message. Treat this as primary context:\n---\n${options.newUploadsContext.join('\n---\n')}\n---\n\n`;
+    }
     if (state.retrievedContext.length > 0) {
-      prompt += `Here is some potentially relevant context retrieved from uploaded files and chat history:\n---\n${state.retrievedContext.join('\n---\n')}\n---\n\n`;
+      prompt += `Additionally, here is relevant context retrieved from previously uploaded files for this session:\n---\n${state.retrievedContext.join('\n---\n')}\n---\n\n`;
     }
 
     // Section 3: The user's latest message.
     if (state.textInput) {
       prompt += `The user has just sent this message: "${state.textInput}"\n\n`;
+    } else if (options?.newUploadsContext && options.newUploadsContext.length > 0) {
+      prompt += `No explicit message provided. Summarize or respond based on the newly uploaded files and any relevant context.\n\n`;
     } else {
-      prompt += `The user has just uploaded files. Please provide a summary or a relevant response based on the uploaded content and context.\n\n`;
+      prompt += `No explicit message provided. Summarize or respond based on the available context.\n\n`;
     }
 
     prompt += 'Based on all the information provided (especially the most recent messages), generate a comprehensive and relevant response.';
